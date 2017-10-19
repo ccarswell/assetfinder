@@ -1,0 +1,598 @@
+<!DOCTYPE html> %%[ SET @urlThis = RequestParameter('PAGEURL') ]%%
+<script runat="server">
+	Platform.Load("core", "1.1.1");
+
+	var pwd = Platform.Request.GetQueryStringParameter('pwd'); // value: retrieving password from URL
+	if (pwd == "5e751S23Gr") {
+		pwd = "OK"
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//Global Variables
+		//-----------------------------------------------------------------------------------------------------------------------------
+
+		var startTime = (new Date()).getTime(); // Used for timestamping later
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//Changing test parameters
+		//-----------------------------------------------------------------------------------------------------------------------------
+
+		var testParams = false;
+		if (testParams === false) {
+			var testCopy = ""
+		} else {
+			var testCopy = " - Test Mode Activated"
+		}
+
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//Checking if Debug mode is enabled from URL
+		//-----------------------------------------------------------------------------------------------------------------------------
+
+		var debugParam = Platform.Request.GetQueryStringParameter("debug");
+		if (debugParam == null || debugParam === "false") {
+			var debugMode = false;
+		} else if (debugParam === "true") {
+			var debugMode = true;
+		}
+
+		var debugMsg = "<br /><br /><i>Turn on debug mode by adding <b>&debug=true</b> to the url to investigate further</i>"
+
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//Functions
+		//-----------------------------------------------------------------------------------------------------------------------------
+
+
+		function AJAX() {};
+		AJAX = {
+
+			getQueryStringParameter: function(key, throwErrorIfBlankOrNull, defaultReturn) {
+				var parameter = Request.GetQueryStringParameter(key);
+				var paramFound = true;
+				if (!parameter) {
+					paramFound = false;
+				} else {
+					if (parameter.replace(" ", "") == "")
+						paramFound = false;
+				}
+
+				if (!paramFound)
+					return defaultReturn;
+				else
+					return parameter;
+			},
+
+			processData: function(step, dataJSON) {
+				var etObjects = serverSideProcessing.initiateStep(step, dataJSON);
+				return etObjects;
+			}
+
+		}
+
+		function serverSideProcessing() {};
+		serverSideProcessing = {
+
+			initiateStep: function(step, dataJSON) {
+				//Insert processing functions here for different steps
+				switch (step) {
+					case "1":
+						var responseArr = [];
+						if (dataJSON[0].EmailName != null) {
+							if (testParams === false) {
+								responseArr.push(serverSideProcessing.retrieveEmailLocationFunc(dataJSON[0].EmailName))
+							} else {
+								responseArr.push(serverSideProcessing.retrieveEmailLocationFunc("Test SSJS"))
+							}
+						}
+						if (dataJSON[0].DEName != null) {
+							if (testParams === false) {
+								responseArr.push(serverSideProcessing.retrieveDELocationFunc(dataJSON[0].DEName))
+							} else {
+								responseArr.push(serverSideProcessing.retrieveDELocationFunc("Customer"))
+							}
+						}
+
+						if (dataJSON[0].ContentName != null) {
+							if (testParams === false) {
+								responseArr.push(serverSideProcessing.retrieveContentLocationFunc(dataJSON[0].ContentName))
+							} else {
+								responseArr.push(serverSideProcessing.retrieveContentLocationFunc("Test"))
+							}
+						}
+						break;
+					case "2":
+						var responseBody = serverSideProcessing.step2(dataJSON);
+						break;
+					case "3":
+						var responseBody = serverSideProcessing.step3(dataJSON);
+						break;
+					case "4":
+						var responseBody = serverSideProcessing.step4(dataJSON);
+						break;
+					case "5":
+						var responseBody = serverSideProcessing.step5(dataJSON);
+						break;
+					default:
+						var responseBody = "";
+				}
+
+				var result = ("<table cellspacing=\"1\" style=\"width:800px; background-color: white; border: 1px solid black;cell-spacing:5px;text-align:center\"><thead><td>Type</td><td>Name</td><td>Location</td></thead>")
+
+				for (var i = 0; i < responseArr.length; i++) {
+
+					result += resultProcessing.displayResponse2(responseArr[i]);
+				}
+				result += ("</table>")
+				return (result)
+			},
+
+			retrieveEmailLocationFunc: function(emailName) {
+
+				var statusJSON = [];
+				var stepStatus;
+				var stepErrorMsg;
+
+				if (emailName != null) {
+
+					var status = {};
+					status["Type"] = "Email";
+					status["Name"] = emailName;
+
+					var retrieveEmailLocationValue = serverSideProcessing.retrieveEmailDetails(emailName) //Test SSJS
+
+					status["Value"] = retrieveEmailLocationValue + "/" + emailName;
+
+					if (retrieveEmailLocationValue != null) {
+						stepStatus = "OK"
+					} else {
+						stepStatus = "Fail"
+						stepErrorMsg = "<font style=\"color:red\">Could not find Email Name</font>"
+					}
+
+					status["Status"] = stepStatus;
+					status["ErrorMsg"] = stepErrorMsg;
+
+					//Calculating Runtime of Step
+					var endTime = (new Date()).getTime();
+					var runTime = (endTime - startTime) / 1000;
+					status["Runtime"] = runTime;
+					statusJSON.push(status)
+
+					return (statusJSON)
+
+				}
+			},
+
+			retrieveDELocationFunc: function(DEName) {
+
+				if (DEName != null) {
+					var statusJSON = [];
+					var stepStatus;
+					var stepErrorMsg;
+					var status = {};
+					status["Type"] = "Data Extension";
+					status["Name"] = DEName;
+
+					var retrieveDELocationValue = serverSideProcessing.getFolderPath(serverSideProcessing.retrieveDEDetails(DEName)) //Customer
+
+					status["Value"] = retrieveDELocationValue + "/" + DEName;
+
+
+					if (retrieveDELocationValue != null) {
+						stepStatus = "OK"
+					} else {
+						stepStatus = "Fail"
+						stepErrorMsg = "Could not find Data Extension Name"
+					}
+
+					status["Status"] = stepStatus;
+					status["ErrorMsg"] = stepErrorMsg;
+
+					//Calculating Runtime of Step
+					var endTime = (new Date()).getTime();
+					var runTime = (endTime - startTime) / 1000;
+					status["Runtime"] = runTime;
+					statusJSON.push(status)
+
+					return (statusJSON)
+				}
+			},
+
+			retrieveDEDetails: function(DEName) {
+
+				var deDefArray = DataExtension.Retrieve({
+					Property: "Name",
+					SimpleOperator: "equals",
+					Value: DEName
+				});
+
+				var folderID = deDefArray[0].CategoryID
+				return (folderID)
+
+			},
+
+			retrieveEmailDetails: function(EmailName) {
+
+				var emailDefArray = Email.Retrieve({
+					Property: "Name",
+					SimpleOperator: "equals",
+					Value: EmailName
+				});
+
+				var folderName = emailDefArray[0].Folder
+				return (folderName)
+
+			},
+
+			getFolderByID: function(id) {
+				var results;
+				var filter = {
+					Property: "ID",
+					SimpleOperator: "equals",
+					Value: id
+				};
+				results = Folder.Retrieve(filter);
+
+				for (var folderKey in results)
+					return results[folderKey];
+
+				return null;
+
+			},
+
+			getFolderPath: function(folderID) {
+				var lastFolder = serverSideProcessing.getFolderByID(folderID);
+				var folderPath = lastFolder.Name;
+
+				while (lastFolder.ParentFolder != null && lastFolder.ParentFolder.Name != null) {
+					lastFolder = serverSideProcessing.getFolderByID(lastFolder.ParentFolder.ID);
+					folderPath = lastFolder.Name + "/" + folderPath;
+				}
+
+				return folderPath;
+			},
+
+			retrieveContentLocationFunc: function(contentName) {
+
+				if (contentName != null) {
+					var statusJSON = [];
+					var stepStatus;
+					var stepErrorMsg;
+					var status = {};
+					status["Type"] = "Content";
+					status["Name"] = contentName;
+
+					var retrieveContentLocationValue = serverSideProcessing.getFolderPath(serverSideProcessing.retrieveContentDetails(contentName))
+
+					status["Value"] = retrieveContentLocationValue + "/" + contentName;
+
+					if (retrieveContentLocationValue != null) {
+						stepStatus = "OK"
+					} else {
+						stepStatus = "Fail"
+						stepErrorMsg = "Could not find Content"
+					}
+
+					status["Status"] = stepStatus;
+					status["ErrorMsg"] = stepErrorMsg;
+
+					//Calculating Runtime of Step
+					var endTime = (new Date()).getTime();
+					var runTime = (endTime - startTime) / 1000;
+					status["Runtime"] = runTime;
+					statusJSON.push(status)
+
+					return (statusJSON)
+				}
+			},
+
+			retrieveContentDetails: function(contentDE) {
+
+				var contentDefArray = ContentAreaObj.Retrieve({
+					Property: "Name",
+					SimpleOperator: "equals",
+					Value: contentDE
+				});
+
+				var folderID = contentDefArray[0].CategoryID
+				return (folderID)
+
+			},
+
+			step1: function(dataJSON) {
+				//run step 1 function here
+				return (dataJSON)
+			},
+
+			step2: function(dataJSON) {
+				//run step 2 function here
+				return (dataJSON)
+			},
+
+			step3: function(dataJSON) {
+				//run step 3 function here
+				return (dataJSON)
+			},
+
+			step4: function(dataJSON) {
+				//run step 4 function here
+				return (dataJSON)
+			},
+
+			step5: function(dataJSON) {
+				//run step 5 function here
+				return (dataJSON)
+			}
+
+		}
+
+		function resultProcessing() {};
+		resultProcessing = {
+
+			WriteResult: function(code, message, data) {
+				var result = {};
+				result["CODE"] = code;
+				result["MESSAGE"] = message;
+				result["DATA"] = data;
+				result["OPERATION_LOG"] = operationLog;
+				Write(resultProcessing.writeJSON(result));
+				resultProcessing.writeJSON(result);
+			},
+
+			writeJSON: function(obj) {
+				Write("|~|~|" + Stringify(obj).replace(/\n/g, "").replace(/\r/g, "") + "|~|~|");
+			},
+
+			displayResponse: function(statusJSON, stepErrorMsg, stepStatus, value) {
+
+				if (stepErrorMsg == null) {
+					stepErrorMsg = "No Error"
+				}
+
+				if (debugMode === true) {
+					return (Stringify(statusJSON) + " <br />ErrorMsg: " + stepErrorMsg);
+				} else if (debugMode === false && stepStatus === "OK") {
+					if (value != null) {
+						return ("<span style=\"color:rgb(0, 195, 37); font-size:1.5em\"><br />Completed Successfully</span><br /><br /><span style=\"color:rgb(0, 50, 195); font-size:1.3em\">Location: " + value + " <br /></span>")
+							//				} else {
+							//					return ("<span style=\"color:rgb(0, 195, 37); font-size:1.5em\">Completed Successfully</span><br /><br /><span style=\"color:rgb(0, 50, 195); font-size:1.3em\">Location: " + value + " </span>")
+					}
+				} else if (debugMode === false && stepStatus !== "OK") {
+					return ("<span style=\"color:red; font-size:1.5em\">Error!</span><br/><br/>" + stepErrorMsg)
+				}
+
+			},
+
+			displayResponse2: function(statusJSON) {
+
+				var result = "<tr>"
+				result += "<td>"
+				result += statusJSON[0].Type
+				result += "</td>"
+				result += "<td>"
+				result += statusJSON[0].Name
+				result += "</td>"
+				result += "<td>"
+				if (statusJSON[0].Status == "OK") {
+					result += statusJSON[0].Value
+				} else {
+					result += statusJSON[0].ErrorMsg
+				}
+				result += "</td>"
+				result += "</tr>"
+
+				return (result)
+
+			}
+
+		}
+
+		//NOTE:These functions are run when the page is refreshed with AJAX
+		var step = AJAX.getQueryStringParameter("step", true, null);
+		var emailName = AJAX.getQueryStringParameter("emailname", true, null);
+		var DEName = AJAX.getQueryStringParameter("dename", true, null);
+		var contentName = AJAX.getQueryStringParameter("contentname", true, null);
+		if (step != null) {
+			//Creating JSON Data Package
+			var dataJSON = [];
+			var dataObj = {};
+			dataObj["EmailName"] = emailName;
+			dataObj["DEName"] = DEName;
+			dataObj["ContentName"] = contentName;
+			dataJSON.push(dataObj);
+
+			resultObj = AJAX.processData(step, dataJSON);
+			resultProcessing.WriteResult("SUCCESS", "Step " + step + " initiated", resultObj);
+			return; //this passes the result back to the front-end
+		}
+
+		function write(object) {
+			Write(Stringify(object) + "<br />");
+		}
+
+</script>
+<html>
+
+<head>
+	<title>Asset Finder</title>
+	<link rel="stylesheet" type="text/css" href="https://image.s4.exct.net/lib/fe8d157373610c7f7c/m/1/sendpreview_v4.css" />
+	<script src="https://image.s4.exct.net/lib/fe8d157373610c7f7c/m/1/jquery.js"></script>
+	<style>
+		.modal {
+			display: none;
+			position: fixed;
+			z-index: 5000;
+			top: 0;
+			left: 0;
+			height: 100%;
+			width: 100%;
+			background: rgba( 0, 0, 0, 0.8) url('https://image.s4.exct.net/lib/fe8d157373610c7f7c/m/1/ajax-loader4.gif') 50% 50% no-repeat;
+		}
+		
+		.completed {
+			color: #FFFFFF;
+			background-image: linear-gradient(-90deg, #1EEc00 0%, #1EEc00 100%);
+		}
+		
+		div.footer {
+			font-family: Helvetica, Arial, sans-serif;
+			text-align: center;
+			font-size: 10px;
+			margin-top: 40px;
+			padding: 15px 0px;
+		}
+		
+		#response {
+			font-family: Helvetica, Arial, sans-serif;
+			text-align: center;
+			/*			font-size: 10px;*/
+			margin-top: 20px;
+			padding: 15px 0px;
+		}
+		
+		#renderviewContentHTMLContainer {
+			display: inline-block;
+		}
+		
+		table {
+			text-align: left;
+			font-family: Helvetica, Arial, sans-serif;
+			;
+			background: white;
+		}
+		
+		table thead tr,
+		table tfoot tr {
+			background: #f1f1f1;
+			font-weight: bold;
+		}
+		
+		table tbody tr {
+			background: white;
+		}
+		
+		td,
+		th {
+			border: 0px solid white;
+		}
+
+	</style>
+
+</head>
+
+<body>
+
+
+	<div id="envelope" class="envelope" style="display:block; margin:100px auto 30px auto">
+		<h1 class="title">Asset Finder <ctrl:var name=testCopy/></h1>
+		<input type="text" name="emailname" id="emailname" placeholder="Email Name" class="your-name" />
+		<input type="text" name="dename" id="dename" placeholder="Data Extension Name" class="email-address" />
+		<input type="text" name="contentname" id="contentname" placeholder="Content Name" class="list-external-key" />
+		<button class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only prep-data" role="button" onclick="AJAXFS.initiateStep(1)" id="step1"><span class="ui-button-text">Find Assets</span></button>
+
+	</div>
+
+	<script type="text/javascript">
+		var baseUrl = "%%=v(@urlThis)=%%";
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//AJAX functions
+		//-----------------------------------------------------------------------------------------------------------------------------
+
+		function AJAXFS() {};
+		AJAXFS = {
+
+			initiateStep: function(step) {
+
+				$('#modal').show();
+
+				//NOTE: Selecting form elements for submission
+				var emailName = $("input.your-name").val();
+				var DEName = $("input.email-address").val();
+				var contentName = $("input.list-external-key").val();
+
+				if (DEName != "" || emailName != "" || contentName != "") {
+					AJAXFS.ETpostData(baseUrl + "&step=" + step + "&emailname=" + emailName + "&dename=" + DEName + "&contentname=" + contentName, null, function(responseData) {
+						if (responseData["CODE"] != "SUCCESS") {} else {
+							var etObjects = responseData["DATA"];
+							AJAXFS.renderviewResponse(etObjects, step);
+						}
+					});
+				} else {
+					AJAXFS.renderviewResponse("<span style=\"color:red\">Please fill in all fields before continuing</span>")
+				}
+			},
+
+			//The ETpostData function uses a Jquery $.ajax to post the page to itself
+			ETpostData: function(pURL, pData, processResponse) {
+				console.log(new Date().toString() + ":Posting to URL: " + pURL + "&" + pData);
+				$.ajax({
+					type: "POST",
+					url: pURL,
+					data: pData,
+					success: function(response) {
+
+						console.log("ETPostData response: ");
+						console.log(response);
+
+						var resp = AJAXFS.ETParseJSON(response);
+
+						console.log("ETPostData response: ");
+						console.log(resp);
+
+						processResponse(resp);
+					}
+				});
+			},
+
+			ETParseJSON: function(json) {
+				json = json.split('|~|~|')[1].replace(/\s+$/, "").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+
+				try {
+					json = $.parseJSON(json);
+				} catch (msg) {
+					if (confirm("ExactTarget Timeout - please try again later")) {
+						console.log(msg);
+						alert(msg);
+					}
+					return null;
+				}
+				return json;
+			},
+
+			renderviewResponse: function(etObjects, step) {
+				var viewContentHTML = etObjects;
+				// load the container
+				$('#renderviewContentHTMLContainer').html(viewContentHTML);
+				$('#modal').hide();
+				$("#step" + step).addClass("completed")
+			}
+		}
+
+	</script>
+
+
+	<!--Window-->
+	<div id="response" title="Response">
+		<div id=renderviewContentHTMLContainer></div>
+	</div>
+
+	<!--Modal (full screen loading element)-->
+	<div class="modal" id="modal"></div>
+
+
+	<div class="footer">
+		<p> Designed With Care by <a href="https://github.com/ccarswell/" target="_blank">Christopher Carswell</a></p>
+		<div id="fade" class="black-overlay" style="display:block; opacity:.20; position:absolute; z-index: -1"></div>
+	</div>
+</body>
+
+</html>
+
+<script runat="server">
+	} else {
+		pwd = "Password Failed"
+		Write(pwd)
+	}
+
+</script>
